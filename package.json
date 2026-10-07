@@ -1,0 +1,9 @@
+{
+  "name": "northstar-recruitment-management",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Recruitment agency ATS, placement, invoice, and receivables management app",
+  "engines": { "node": ">=22.13" },
+  "scripts": { "start": "node server.js", "dev": "node --watch server.js" }
+}
+
