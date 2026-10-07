@@ -3,10 +3,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
+const { isSea, getAsset } = require('node:sea');
+const os = require('node:os');
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const DATA_DIR = process.env.DATA_DIR || (isSea ? path.join(process.env.APPDATA || os.homedir(), 'NorthstarRecruitment', 'data') : path.join(__dirname, 'data'));
 const DB_PATH = process.env.DB_PATH || path.join(DATA_DIR, 'northstar.sqlite');
 const COOKIE = 'northstar_session';
 const SESSION_MS = 8 * 60 * 60 * 1000;
@@ -40,7 +42,7 @@ function userPublic(u) { return {id:u.id,name:u.name,email:u.email,role:u.role};
 function initAdmin() {
   if (db.prepare('SELECT count(*) n FROM users').get().n) return;
   const email=(process.env.ADMIN_EMAIL||'').trim().toLowerCase(), password=process.env.ADMIN_PASSWORD||'';
-  if (!email || password.length < 12) { console.error('First run setup required. Set ADMIN_EMAIL and ADMIN_PASSWORD (at least 12 characters) and restart.'); process.exit(1); }
+  if (!email || password.length < 12) { if (isSea) return; console.error('First run setup required. Set ADMIN_EMAIL and ADMIN_PASSWORD (at least 12 characters) and restart.'); process.exit(1); }
   db.prepare('INSERT INTO users(name,email,password_hash,role,created_at) VALUES(?,?,?,?,?)').run(process.env.ADMIN_NAME||'Workspace Founder',email,hashPassword(password),'founder',now());
   console.log(`Founder account created for ${email}`);
 }
@@ -102,9 +104,11 @@ function insertRecord(resource, data, user) {
 function updateRecord(resource,id,data,user){const d=definitions[resource];if(!d)throw new Error('Unknown record type');const clean={};for(const k of d.fields)if(data[k]!==undefined)clean[k]=asNumber(data[k],k);if(!Object.keys(clean).length)throw new Error('No editable fields supplied');clean.updated_at=now();const cols=Object.keys(clean);const result=db.prepare(`UPDATE ${d.table} SET ${cols.map(k=>k+'=?').join(',')} WHERE id=?`).run(...cols.map(k=>clean[k]),id);if(!result.changes)throw new Error('Record not found');recordActivity(user,'updated',resource,id);return true}
 async function route(req,res){
  const url=new URL(req.url,`http://${req.headers.host||'localhost'}`), parts=url.pathname.split('/').filter(Boolean), method=req.method;
- if(method==='GET'&&url.pathname==='/'){return send(res,200,fs.readFileSync(path.join(__dirname,'public','index.html'),'utf8'))}
+ if(method==='GET'&&url.pathname==='/'){return send(res,200,isSea?getAsset('app.html','utf8'):fs.readFileSync(path.join(__dirname,'public','index.html'),'utf8'))}
  if(method==='GET'&&url.pathname==='/health')return json(res,200,{status:'ok'});
- if(method==='POST'&&url.pathname==='/api/login'){
+ if(method==='GET'&&url.pathname==='/api/setup')return json(res,200,{required:db.prepare('SELECT count(*) n FROM users').get().n===0});
+ if(method==='POST'&&url.pathname==='/api/setup'){const b=await parseBody(req);if(db.prepare('SELECT count(*) n FROM users').get().n!==0)return fail(res,409,'Setup is already complete');if(!b.name||!b.email||String(b.password||'').length<12)return fail(res,400,'Enter your name, a valid email, and a password of at least 12 characters');const id=db.prepare('INSERT INTO users(name,email,password_hash,role,created_at) VALUES(?,?,?,?,?)').run(String(b.name).trim(),String(b.email).trim().toLowerCase(),hashPassword(b.password),'founder',now()).lastInsertRowid;const token=crypto.randomBytes(32).toString('hex');sessions.set(token,{userId:Number(id),expires:Date.now()+SESSION_MS});const u=db.prepare('SELECT * FROM users WHERE id=?').get(id);return json(res,201,{user:userPublic(u)},{'Set-Cookie':`${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS/1000}${process.env.NODE_ENV==='production'?'; Secure':''}`})}
+ if(method==='POST'&&url.pathname==='/api/login'){ 
   const b=await parseBody(req),u=db.prepare('SELECT * FROM users WHERE email=? AND active=1').get(String(b.email||'').trim().toLowerCase());
   if(!u||!verifyPassword(String(b.password||''),u.password_hash))return fail(res,401,'Email or password is incorrect');
   const token=crypto.randomBytes(32).toString('hex');sessions.set(token,{userId:u.id,expires:Date.now()+SESSION_MS});
@@ -140,6 +144,6 @@ async function route(req,res){
  return fail(res,404,'Not found');
 }
 const server=http.createServer((req,res)=>{route(req,res).catch(e=>{console.error(e);if(!res.headersSent)fail(res,500,'Something went wrong')})});
-server.listen(PORT,HOST,()=>console.log(`Northstar Recruitment OS running at http://${HOST}:${PORT}`));
+server.listen(PORT,HOST,()=>{const address=`http://${HOST}:${PORT}`;console.log(`Northstar Recruitment OS running at ${address}`);if(isSea&&process.env.NO_BROWSER!=='1')setTimeout(()=>require('node:child_process').exec(`start "" "${address}"`),700)});
 process.on('SIGINT',()=>{db.close();server.close(()=>process.exit(0))});process.on('SIGTERM',()=>{db.close();server.close(()=>process.exit(0))});
 
