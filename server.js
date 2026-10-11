@@ -6,7 +6,7 @@ const { DatabaseSync } = require('node:sqlite');
 const { isSea, getAsset } = require('node:sea');
 const os = require('node:os');
 
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(process.env.PORT || (isSea ? 3010 : 3000));
 const HOST = process.env.HOST || '127.0.0.1';
 const DATA_DIR = process.env.DATA_DIR || (isSea ? path.join(process.env.APPDATA || os.homedir(), 'NorthstarRecruitment', 'data') : path.join(__dirname, 'data'));
 const DB_PATH = process.env.DB_PATH || path.join(DATA_DIR, 'northstar.sqlite');
@@ -144,6 +144,20 @@ async function route(req,res){
  return fail(res,404,'Not found');
 }
 const server=http.createServer((req,res)=>{route(req,res).catch(e=>{console.error(e);if(!res.headersSent)fail(res,500,'Something went wrong')})});
-server.listen(PORT,HOST,()=>{const address=`http://${HOST}:${PORT}`;console.log(`Northstar Recruitment OS running at ${address}`);if(isSea&&process.env.NO_BROWSER!=='1')setTimeout(()=>require('node:child_process').exec(`start "" "${address}"`),700)});
+async function isHealthy(){return new Promise(resolve=>{const request=http.get({hostname:HOST,port:PORT,path:'/health',timeout:700},response=>{response.resume();resolve(response.statusCode===200)});request.on('error',()=>resolve(false));request.on('timeout',()=>{request.destroy();resolve(false)})})}
+function openBrowser(address){require('node:child_process').exec(`start "" "${address}"`,{windowsHide:true})}
+async function launchPackaged(){
+ const address=`http://${HOST}:${PORT}`;
+ if(await isHealthy()){openBrowser(address);return}
+ const logDir=path.join(process.env.APPDATA||os.homedir(),'NorthstarRecruitment','logs');
+ fs.mkdirSync(logDir,{recursive:true});
+ const log=fs.createWriteStream(path.join(logDir,'server.log'),{flags:'a'});
+ const child=require('node:child_process').spawn(process.execPath,[],{detached:true,windowsHide:true,stdio:['ignore',log,log],env:{...process.env,NORTHSTAR_SERVER_CHILD:'1'}});
+ child.unref();
+ for(let i=0;i<60;i++){if(await isHealthy()){openBrowser(address);return}await new Promise(resolve=>setTimeout(resolve,250))}
+ log.write(`Backend did not become healthy at ${new Date().toISOString()} on ${address}\n`);log.end();openBrowser(address);
+}
+if(isSea&&process.env.NORTHSTAR_SERVER_CHILD!=='1')launchPackaged().then(()=>process.exit(0)).catch(error=>{console.error(error);process.exit(1)});
+else server.listen(PORT,HOST,()=>console.log(`Northstar Recruitment OS running at http://${HOST}:${PORT}`));
 process.on('SIGINT',()=>{db.close();server.close(()=>process.exit(0))});process.on('SIGTERM',()=>{db.close();server.close(()=>process.exit(0))});
 
