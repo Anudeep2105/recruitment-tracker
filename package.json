@@ -1,6 +1,6 @@
 {
   "name": "northstar-recruitment-management",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Recruitment agency ATS, placement, invoice, and receivables management app",
   "engines": {
@@ -15,4 +15,3 @@
     "postject": "^1.0.0-alpha.6"
   }
 }
-
