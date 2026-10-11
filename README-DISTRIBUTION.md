@@ -1,24 +1,30 @@
-# Northstar Recruitment Windows build
+# Northstar Recruitment OS 1.1.0 — Windows x64
 
-## Start
+## Install and start
 
-Run `NorthstarRecruitment.exe`. Your browser opens to the local app. On the first launch, create a founder account in the setup screen. The app stores its local database under `%APPDATA%\NorthstarRecruitment\data\northstar.sqlite` and listens only on this computer (`127.0.0.1:3000`). Keep the database folder backed up; it contains candidate, client, and financial information.
+1. Download and extract `NorthstarRecruitment-1.1.0-Windows-x64.zip`.
+2. Double-click `NorthstarRecruitment.exe`. Keep its startup window open while using the app.
+3. On first launch, create the founder account. Choose a password of at least 12 characters.
+4. The app opens in your browser at `http://127.0.0.1:3010`.
 
-To use another port, set the `PORT` environment variable before launching. The app is a Windows x64 executable and does not require Node.js to be installed.
+The app runs locally on this computer and does not require Node.js. Its database is stored at `%APPDATA%\NorthstarRecruitment\data\northstar.sqlite`. Back up that folder to protect candidate, client, billing, and financial records. Existing SQLite data is migrated automatically when the app starts; do not delete the database when upgrading.
 
-## Database integration status
+## Billing setup
 
-This build uses its bundled SQLite database. SQL Server and Microsoft Access are **not connected as live databases in this build**. The source currently has no ODBC/database-provider adapter. The executable is not configured to point at either external database.
+Sign in as the founder or an administrator and open **Billing settings** to add your company legal name, GSTIN, address, invoice prefix, contact information, accepted payment modes, bank / UPI details, invoice terms, and signatory information. Add each client's GSTIN and billing address in **Clients → Edit**. These details are used on downloaded invoices. GSTIN is printed; this app does not calculate GST tax.
 
-To complete the requested SQL Server and Access integration, provide:
+## Upgrade
 
-- SQL Server: server/instance, database name, authentication type (Windows or SQL login), and whether the target is local or remote. Do not send passwords in chat; we can add a secure connection setup screen.
-- Access: `.accdb` or `.mdb` file location and confirmation that the target Windows computers have the matching 64-bit Microsoft Access Database Engine / ODBC driver installed.
-- Whether the SQL Server or Access database must be the authoritative store, or whether you want imports/exports from the app's SQLite database.
+Close the old app window before launching the new version. Keep the existing `%APPDATA%\NorthstarRecruitment` folder; it contains the database and first-run settings.
 
-The Access ODBC driver is a separate Windows prerequisite and must match the app's 64-bit architecture. SQL Server connectivity also requires a configured server and credentials. No credentials are bundled in this release.
+## Database connectors
 
-## Build from source
+The live app uses SQLite. SQL Server and Microsoft Access are not connected in this build. The database settings page can move the SQLite database to another file path.
 
-Requires Node.js 24 on Windows. Run `npm install`, then `npm run build:exe`. The generated executable is written to `dist\NorthstarRecruitment.exe`.
+## Verify the download
 
+The release folder includes a `.sha256` file. In PowerShell, run:
+
+`Get-FileHash .\NorthstarRecruitment-1.1.0-Windows-x64.zip -Algorithm SHA256`
+
+Compare the displayed hash with the value in the checksum file.
